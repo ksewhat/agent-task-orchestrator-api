@@ -45,7 +45,25 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-필요에 따라 `.env` 파일을 수정하세요.
+메모장으로 `.env` 파일을 열어 필요한 값을 입력합니다.
+
+```powershell
+notepad .env
+```
+
+`.env` 파일 예시:
+
+```env
+APP_NAME=Agent Task Orchestrator API
+APP_ENV=local
+OPENAI_API_KEY=sk-your-api-key-here
+```
+
+> **주의:** `OPENAI_API_KEY`를 Git에 커밋하면 절대 안 됩니다.
+> `.env` 파일은 `.gitignore`에 추가되어 있어야 합니다.
+>
+> `OPENAI_API_KEY`는 현재 단계에서 선택 사항입니다.
+> 값이 없어도 서버는 정상 시작되며, LLM 기능을 사용하는 시점에 오류가 발생합니다.
 
 ### 5. 서버 실행
 
