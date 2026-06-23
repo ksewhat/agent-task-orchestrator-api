@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     # Optional: 없어도 서버가 시작됨. LLM 기능 사용 시점에 검증함.
     openai_api_key: str | None = None
+    openai_model: str = "gpt-4o-mini"
 
     class Config:
         env_file = ".env"

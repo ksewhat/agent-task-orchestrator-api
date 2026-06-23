@@ -57,13 +57,14 @@ notepad .env
 APP_NAME=Agent Task Orchestrator API
 APP_ENV=local
 OPENAI_API_KEY=sk-your-api-key-here
+OPENAI_MODEL=gpt-4o-mini
 ```
 
 > **주의:** `OPENAI_API_KEY`를 Git에 커밋하면 절대 안 됩니다.
 > `.env` 파일은 `.gitignore`에 추가되어 있어야 합니다.
 >
-> `OPENAI_API_KEY`는 현재 단계에서 선택 사항입니다.
-> 값이 없어도 서버는 정상 시작되며, LLM 기능을 사용하는 시점에 오류가 발생합니다.
+> `OPENAI_API_KEY`가 없어도 서버는 정상 시작됩니다.
+> `/agent/plan` 호출 시에만 503 에러가 반환됩니다.
 
 ### 5. 서버 실행
 
@@ -80,10 +81,9 @@ uvicorn app.main:app --reload
 | Swagger UI | http://localhost:8000/docs |
 | ReDoc | http://localhost:8000/redoc |
 | Health Check | http://localhost:8000/health |
+| Agent Plan | POST http://localhost:8000/agent/plan |
 
 ### Health Check 테스트
-
-PowerShell에서 직접 호출:
 
 ```powershell
 Invoke-RestMethod -Uri http://localhost:8000/health -Method GET
@@ -96,4 +96,50 @@ Invoke-RestMethod -Uri http://localhost:8000/health -Method GET
   "status": "ok",
   "service": "Agent Task Orchestrator API"
 }
+```
+
+### Agent Plan API 테스트
+
+```powershell
+$body = '{"user_request": "FastAPI 서버를 AWS EC2에 배포하는 계획을 세워줘"}'
+Invoke-RestMethod -Uri http://localhost:8000/agent/plan -Method POST -Body $body -ContentType "application/json"
+```
+
+정상 응답 예시:
+
+```json
+{
+  "goal": "FastAPI 서버를 AWS EC2에 성공적으로 배포",
+  "summary": "로컬 개발 환경에서 검증된 FastAPI 서버를 AWS EC2 인스턴스에 배포한다.",
+  "steps": [
+    {
+      "order": 1,
+      "title": "EC2 인스턴스 생성",
+      "description": "AWS 콘솔에서 적절한 인스턴스 타입을 선택하고 생성한다.",
+      "expected_output": "실행 중인 EC2 인스턴스, Public IP"
+    }
+  ],
+  "risks": ["보안 그룹 설정 누락", "환경변수 미설정"],
+  "next_action": "AWS 콘솔에 로그인하여 EC2 인스턴스를 생성한다."
+}
+```
+
+#### 에러 응답 예시
+
+**OPENAI_API_KEY 없음 (503)**:
+
+```json
+{ "detail": "OPENAI_API_KEY가 설정되지 않았습니다. .env 파일에 OPENAI_API_KEY를 입력해주세요." }
+```
+
+**빈 요청 (400)**:
+
+```json
+{ "detail": "user_request는 비어 있을 수 없습니다." }
+```
+
+**OpenAI API 호출 실패 (502)**:
+
+```json
+{ "detail": "OpenAI API 호출에 실패했습니다: ..." }
 ```
