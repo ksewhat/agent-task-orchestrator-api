@@ -80,8 +80,10 @@ uvicorn app.main:app --reload
 |------|-----|
 | Swagger UI | http://localhost:8000/docs |
 | ReDoc | http://localhost:8000/redoc |
-| Health Check | http://localhost:8000/health |
-| Agent Plan | POST http://localhost:8000/agent/plan |
+| Health Check | GET http://localhost:8000/health |
+| Agent Plan (즉시 실행) | POST http://localhost:8000/agent/plan |
+| Job 생성 | POST http://localhost:8000/jobs |
+| Job 상태 조회 | GET http://localhost:8000/jobs/{job_id} |
 
 ### Health Check 테스트
 
@@ -143,3 +145,44 @@ Invoke-RestMethod -Uri http://localhost:8000/agent/plan -Method POST -Body $body
 ```json
 { "detail": "OpenAI API 호출에 실패했습니다: ..." }
 ```
+
+### Job API 테스트
+
+**1단계: Job 생성 (POST /jobs)**
+
+```powershell
+$body = '{"user_request": "FastAPI 서버를 배포하는 계획을 세워줘"}'
+$job = Invoke-RestMethod -Uri http://localhost:8000/jobs -Method POST -Body $body -ContentType "application/json"
+$job
+```
+
+응답 예시 (HTTP 202 Accepted):
+
+```json
+{
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "pending",
+  "user_request": "FastAPI 서버를 배포하는 계획을 세워줘",
+  "context": null,
+  "created_at": "2026-06-23T10:00:00Z",
+  "updated_at": "2026-06-23T10:00:00Z",
+  "result": null,
+  "error": null
+}
+```
+
+**2단계: Job 상태 조회 (GET /jobs/{job_id})**
+
+```powershell
+$jobId = $job.job_id
+Invoke-RestMethod -Uri "http://localhost:8000/jobs/$jobId" -Method GET
+```
+
+**Job을 찾을 수 없는 경우 (404)**:
+
+```json
+{ "detail": "Job을 찾을 수 없습니다: 존재하지-않는-id" }
+```
+
+> 현재 단계에서 Job은 항상 `pending` 상태입니다.
+> 다음 단계에서 백그라운드 실행이 추가되면 `running → completed / failed`로 전환됩니다.
