@@ -82,8 +82,11 @@ uvicorn app.main:app --reload
 | ReDoc | http://localhost:8000/redoc |
 | Health Check | GET http://localhost:8000/health |
 | Agent Plan (즉시 실행) | POST http://localhost:8000/agent/plan |
-| Job 생성 | POST http://localhost:8000/jobs |
-| Job 상태 조회 | GET http://localhost:8000/jobs/{job_id} |
+| Job 생성 (기본) | POST http://localhost:8000/jobs |
+| Job 상태 조회 (기본) | GET http://localhost:8000/jobs/{job_id} |
+| **Agent Job 생성 (비동기 LLM)** | **POST http://localhost:8000/agent/jobs** |
+| **Agent Job 상태 조회** | **GET http://localhost:8000/agent/jobs/{job_id}** |
+| **Agent Job 결과 조회** | **GET http://localhost:8000/agent/jobs/{job_id}/result** |
 
 ### Health Check 테스트
 
@@ -185,4 +188,78 @@ Invoke-RestMethod -Uri "http://localhost:8000/jobs/$jobId" -Method GET
 ```
 
 > 현재 단계에서 Job은 항상 `pending` 상태입니다.
-> 다음 단계에서 백그라운드 실행이 추가되면 `running → completed / failed`로 전환됩니다.
+> LLM 실행이 필요하면 아래 Agent Jobs API를 사용하세요.
+
+### Agent Jobs API 테스트 (비동기 LLM 실행)
+
+상태 전환: `pending → running → succeeded / failed`
+
+**1단계: Job 생성 및 백그라운드 LLM 실행 시작**
+
+```powershell
+$body = '{"user_request": "FastAPI 서버를 AWS EC2에 배포하는 계획을 세워줘"}'
+$job = Invoke-RestMethod -Uri http://localhost:8000/agent/jobs -Method POST -Body $body -ContentType "application/json"
+$job.job_id
+```
+
+응답 예시 (HTTP 202 Accepted, 즉시 반환):
+
+```json
+{
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "pending",
+  "user_request": "FastAPI 서버를 AWS EC2에 배포하는 계획을 세워줘",
+  "context": null,
+  "created_at": "2026-06-23T10:00:00Z",
+  "updated_at": "2026-06-23T10:00:00Z",
+  "result": null,
+  "error": null
+}
+```
+
+**2단계: 상태 폴링 (LLM 실행 중)**
+
+```powershell
+$jobId = $job.job_id
+Invoke-RestMethod -Uri "http://localhost:8000/agent/jobs/$jobId" -Method GET
+```
+
+실행 중 응답:
+
+```json
+{ "job_id": "...", "status": "running", "result": null, "error": null }
+```
+
+**3단계: 결과 조회**
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/agent/jobs/$jobId/result" -Method GET
+```
+
+성공 시 응답 (`status: "succeeded"`):
+
+```json
+{
+  "job_id": "...",
+  "status": "succeeded",
+  "result": {
+    "goal": "FastAPI 서버를 AWS EC2에 성공적으로 배포",
+    "summary": "...",
+    "steps": [...],
+    "risks": [...],
+    "next_action": "..."
+  },
+  "error": null
+}
+```
+
+실패 시 응답 (`status: "failed"`):
+
+```json
+{
+  "job_id": "...",
+  "status": "failed",
+  "result": null,
+  "error": "OPENAI_API_KEY가 설정되지 않았습니다. .env 파일에 OPENAI_API_KEY를 입력해주세요."
+}
+```
