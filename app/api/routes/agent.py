@@ -1,6 +1,10 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.agent import AgentPlanRequest, AgentPlanResponse
+from app.schemas.job import JobStatus
+from app.services import history_store
 from app.services.llm_client import (
     LLMCallError,
     LLMClientNotConfiguredError,
@@ -19,11 +23,33 @@ def create_agent_plan(request: AgentPlanRequest):
             detail="user_request는 비어 있을 수 없습니다.",
         )
 
+    created_at = datetime.now(timezone.utc)
+
     try:
-        return generate_agent_plan(request.user_request, request.context)
+        result = generate_agent_plan(request.user_request, request.context)
+        history_store.add_entry(
+            user_request=request.user_request,
+            status=JobStatus.SUCCEEDED,
+            goal=result.goal,
+            step_count=len(result.steps),
+            created_at=created_at,
+        )
+        return result
+
     except LLMClientNotConfiguredError as e:
+        history_store.add_entry(
+            user_request=request.user_request,
+            status=JobStatus.FAILED,
+            error=str(e),
+            created_at=created_at,
+        )
         raise HTTPException(status_code=503, detail=str(e))
-    except LLMCallError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    except LLMResponseParseError as e:
+
+    except (LLMCallError, LLMResponseParseError) as e:
+        history_store.add_entry(
+            user_request=request.user_request,
+            status=JobStatus.FAILED,
+            error=str(e),
+            created_at=created_at,
+        )
         raise HTTPException(status_code=502, detail=str(e))

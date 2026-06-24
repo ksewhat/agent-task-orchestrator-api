@@ -87,6 +87,7 @@ uvicorn app.main:app --reload
 | **Agent Job 생성 (비동기 LLM)** | **POST http://localhost:8000/agent/jobs** |
 | **Agent Job 상태 조회** | **GET http://localhost:8000/agent/jobs/{job_id}** |
 | **Agent Job 결과 조회** | **GET http://localhost:8000/agent/jobs/{job_id}/result** |
+| **요청 히스토리 조회** | **GET http://localhost:8000/history** |
 
 ### Health Check 테스트
 
@@ -263,3 +264,38 @@ Invoke-RestMethod -Uri "http://localhost:8000/agent/jobs/$jobId/result" -Method 
   "error": "OPENAI_API_KEY가 설정되지 않았습니다. .env 파일에 OPENAI_API_KEY를 입력해주세요."
 }
 ```
+
+### 히스토리 조회 API
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/history" -Method GET
+Invoke-RestMethod -Uri "http://localhost:8000/history?limit=5" -Method GET
+```
+
+응답 예시:
+
+```json
+{
+  "total": 3,
+  "entries": [
+    {
+      "entry_id": "...",
+      "job_id": "550e8400-...",
+      "user_request": "FastAPI 서버를 배포하는 계획을 세워줘",
+      "status": "succeeded",
+      "goal": "FastAPI 서버를 AWS EC2에 성공적으로 배포",
+      "step_count": 5,
+      "error": null,
+      "created_at": "2026-06-24T10:00:00Z",
+      "completed_at": "2026-06-24T10:00:08Z"
+    }
+  ]
+}
+```
+
+> **개인정보 및 보안 주의사항**
+>
+> - `user_request`에 API Key, 비밀번호, 개인정보 등 민감한 정보가 포함될 수 있습니다.
+> - 현재 히스토리는 서버 메모리에만 저장되며 서버 재시작 시 초기화됩니다.
+> - 향후 DB에 저장할 경우 민감정보 마스킹 또는 저장 제외 정책을 반드시 검토하세요.
+> - 이 API는 인증 없이 접근 가능하므로 운영 환경에서는 인증 미들웨어를 추가해야 합니다.

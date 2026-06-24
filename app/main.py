@@ -5,6 +5,7 @@ from app.api.routes import health
 from app.api.routes import agent
 from app.api.routes import job
 from app.api.routes import agent_job
+from app.api.routes import history
 
 app = FastAPI(
     title=settings.app_name,
@@ -17,3 +18,4 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(agent.router, prefix="/agent", tags=["Agent"])
 app.include_router(job.router, prefix="/jobs", tags=["Jobs"])
 app.include_router(agent_job.router, prefix="/agent/jobs", tags=["Agent Jobs"])
+app.include_router(history.router, prefix="/history", tags=["History"])
