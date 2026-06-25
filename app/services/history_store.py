@@ -1,13 +1,25 @@
 import uuid
-from collections import deque
 from datetime import datetime, timezone
 
+from app.db.base import SessionLocal
+from app.db.models import HistoryModel
 from app.schemas.history import HistoryEntry
 from app.schemas.job import JobStatus
 
-# 최대 100건만 유지한다. 초과 시 가장 오래된 항목이 자동으로 제거된다.
-# 서버 재시작 시 데이터가 초기화된다.
-_store: deque[HistoryEntry] = deque(maxlen=100)
+
+def _to_entry(row: HistoryModel) -> HistoryEntry:
+    """ORM 행을 Pydantic 응답 모델로 변환한다."""
+    return HistoryEntry(
+        entry_id=row.entry_id,
+        job_id=row.job_id,
+        user_request=row.user_request,
+        status=JobStatus(row.status),
+        goal=row.goal,
+        step_count=row.step_count,
+        error=row.error,
+        created_at=row.created_at,
+        completed_at=row.completed_at,
+    )
 
 
 def add_entry(
@@ -20,27 +32,37 @@ def add_entry(
     created_at: datetime | None = None,
 ) -> HistoryEntry:
     now = datetime.now(timezone.utc)
-    entry = HistoryEntry(
-        entry_id=str(uuid.uuid4()),
-        job_id=job_id,
-        user_request=user_request,
-        status=status,
-        goal=goal,
-        step_count=step_count,
-        error=error,
-        created_at=created_at or now,
-        completed_at=now,
-    )
-    _store.append(entry)
-    return entry
+    with SessionLocal() as session:
+        row = HistoryModel(
+            entry_id=str(uuid.uuid4()),
+            job_id=job_id,
+            user_request=user_request,
+            status=status.value,
+            goal=goal,
+            step_count=step_count,
+            error=error,
+            created_at=created_at or now,
+            completed_at=now,
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _to_entry(row)
 
 
 def get_entries(limit: int = 20) -> list[HistoryEntry]:
     """최신순으로 최대 limit건을 반환한다."""
-    recent = list(_store)
-    recent.reverse()
-    return recent[:limit]
+    with SessionLocal() as session:
+        # completed_at 내림차순 정렬 후 limit 건만 가져옴
+        rows = (
+            session.query(HistoryModel)
+            .order_by(HistoryModel.completed_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [_to_entry(row) for row in rows]
 
 
 def count() -> int:
-    return len(_store)
+    with SessionLocal() as session:
+        return session.query(HistoryModel).count()

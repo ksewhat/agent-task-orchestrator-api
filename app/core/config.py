@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
 
+    # PostgreSQL 접속 URL. .env에 반드시 설정해야 서버가 정상 기동된다.
+    database_url: str = "postgresql://postgres:password@localhost:5432/agent_db"
+
     class Config:
         env_file = ".env"
 
