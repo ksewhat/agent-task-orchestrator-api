@@ -1,26 +1,42 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from app.schemas.job import JobCreateRequest, JobResponse, JobResultResponse
+from app.schemas.job import JobCreateRequest, JobResponse, JobResultResponse, JobStatus
 from app.services import job_store
 from app.services.agent_runner import run_agent_plan_job
+from app.services.task_queue import task_queue
 
 router = APIRouter()
 
 
 @router.post("", response_model=JobResponse, status_code=202)
-def create_agent_job(request: JobCreateRequest, background_tasks: BackgroundTasks):
+def create_agent_job(request: JobCreateRequest):
     """
-    Agent 계획 생성 Job을 등록하고 즉시 job_id를 반환한다.
+    Agent 계획 생성 Job을 RQ 큐에 등록하고 즉시 job_id를 반환한다.
 
     - 응답을 기다리지 않고 202 Accepted를 즉시 반환한다.
-    - LLM 실행은 백그라운드에서 자동으로 시작된다.
+    - LLM 실행은 RQ Worker가 별도 프로세스에서 처리한다.
     - 결과는 GET /agent/jobs/{job_id}/result 로 조회한다.
     """
     if not request.user_request.strip():
         raise HTTPException(status_code=400, detail="user_request는 비어 있을 수 없습니다.")
 
     job = job_store.create_job(request.user_request, request.context)
-    background_tasks.add_task(run_agent_plan_job, job.job_id)
+
+    try:
+        # task_queue.enqueue(): 함수와 인수를 Redis 큐에 등록
+        # RQ Worker가 실행 중이면 즉시 작업을 가져가 처리한다.
+        task_queue.enqueue(run_agent_plan_job, job.job_id)
+    except Exception as e:
+        job_store.update_job_status(
+            job.job_id,
+            JobStatus.FAILED,
+            error=f"작업 큐 등록에 실패했습니다. Redis가 실행 중인지 확인하세요: {e}",
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=f"작업 큐에 연결할 수 없습니다. Redis가 실행 중인지 확인하세요.",
+        )
+
     return job
 
 

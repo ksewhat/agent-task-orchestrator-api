@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # PostgreSQL 접속 URL. .env에 반드시 설정해야 서버가 정상 기동된다.
     database_url: str = "postgresql://postgres:password@localhost:5432/agent_db"
 
+    # Redis 접속 URL. Agent Job 큐에 사용된다.
+    redis_url: str = "redis://localhost:6379/0"
+
     class Config:
         env_file = ".env"
 

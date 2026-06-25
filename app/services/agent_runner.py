@@ -10,10 +10,10 @@ from app.services.llm_client import (
 
 def run_agent_plan_job(job_id: str) -> None:
     """
-    FastAPI BackgroundTasks에 의해 호출되는 LLM 실행 함수.
+    RQ Worker에 의해 별도 프로세스에서 호출되는 LLM 실행 함수.
 
     상태 전환: PENDING → RUNNING → SUCCEEDED / FAILED
-    실행 도중 발생하는 모든 예외를 잡아 FAILED 상태와 에러 메시지로 저장한다.
+    실행 도중 발생하는 모든 예외를 잡아 FAILED 상태와 에러 메시지로 PostgreSQL에 저장한다.
     완료 후 히스토리에 요약 정보를 기록한다.
     """
     job = job_store.get_job(job_id)

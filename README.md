@@ -147,32 +147,46 @@ notepad .env
 
 ```env
 DATABASE_URL=postgresql://postgres:비밀번호@localhost:5432/agent_db
+REDIS_URL=redis://localhost:6379/0
 OPENAI_API_KEY=sk-your-key-here
 ```
 
-**PostgreSQL 데이터베이스 준비 (Step 07 이후 필수)**
-
-PostgreSQL이 설치되어 있지 않다면 Docker로 빠르게 실행할 수 있습니다.
+**PostgreSQL 준비 (Step 07 이후 필수)**
 
 ```powershell
 docker run -d --name agent-db -e POSTGRES_PASSWORD=password -e POSTGRES_DB=agent_db -p 5432:5432 postgres:16
 ```
 
-또는 [PostgreSQL 공식 설치 페이지](https://www.postgresql.org/download/windows/)에서 Windows 설치 파일을 받아 설치할 수 있습니다.
+**Redis 준비 (Step 08 이후 필수)**
 
-설치 후 DB와 유저를 생성합니다. (psql 또는 pgAdmin 사용)
-
-```sql
-CREATE DATABASE agent_db;
+```powershell
+docker run -d --name agent-redis -p 6379:6379 redis:7
 ```
+
+> PostgreSQL 또는 Redis가 이미 로컬에 설치되어 있다면 Docker 없이 사용해도 됩니다.
 
 > 서버 최초 실행 시 `jobs`, `history` 테이블이 자동으로 생성됩니다.
 
-서버 실행:
+**터미널 1 — API 서버 실행:**
 
-```bash
+```powershell
 uvicorn app.main:app --reload
 ```
+
+**터미널 2 — RQ Worker 실행 (Step 08 이후 필수):**
+
+```powershell
+python worker.py
+```
+
+Worker가 시작되면 아래와 같은 메시지가 출력됩니다.
+
+```
+RQ Worker 시작 | Redis: redis://localhost:6379/0 | Queue: agent
+```
+
+> API 서버와 Worker는 별도 터미널에서 동시에 실행되어야 합니다.
+> Worker 없이 `POST /agent/jobs`를 호출하면 Job이 Redis 큐에 쌓이고, Worker가 시작될 때 처리됩니다.
 
 Swagger UI 접속:
 
