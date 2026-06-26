@@ -71,3 +71,53 @@ def get_recent(limit: int = 20) -> list[dict]:
         return [json.loads(item) for item in raw_items]
     except Exception:
         return []
+
+
+# LLM 프롬프트에 포함할 이벤트 타입 — 중간 상태(running, created)는 제외
+_PROMPT_RELEVANT_TYPES = {
+    EVENT_JOB_SUCCEEDED,
+    EVENT_JOB_FAILED,
+    EVENT_PLAN_GENERATED,
+    EVENT_PLAN_FAILED,
+}
+
+# 프롬프트에 포함할 텍스트 길이 제한 — 불필요하게 긴 내용이 LLM에 전달되지 않도록
+_MAX_REQUEST_LEN = 60
+_MAX_GOAL_LEN = 60
+_MAX_ERROR_LEN = 80
+
+
+def build_memory_context(limit: int = 5) -> str | None:
+    """
+    최근 완료 이벤트를 LLM 프롬프트에 포함할 짧은 텍스트로 변환해 반환한다.
+
+    - 중간 상태 이벤트(job_created, job_running)는 제외한다.
+    - 각 필드는 지정 길이로 잘라 과도한 정보가 프롬프트에 들어가지 않게 한다.
+    - Redis 연결 실패 또는 의미 있는 이벤트가 없으면 None을 반환한다.
+    """
+    # 필터링 후에도 limit개를 확보하기 위해 여유 있게 조회
+    all_events = get_recent(limit * 3)
+    meaningful = [e for e in all_events if e.get("event_type") in _PROMPT_RELEVANT_TYPES][:limit]
+
+    if not meaningful:
+        return None
+
+    lines: list[str] = []
+    for event in meaningful:
+        event_type = event.get("event_type", "")
+        payload = event.get("payload", {})
+        # [:N]: 문자열 슬라이싱으로 길이를 제한
+        user_req = str(payload.get("user_request", ""))[:_MAX_REQUEST_LEN]
+
+        if event_type in (EVENT_JOB_SUCCEEDED, EVENT_PLAN_GENERATED):
+            goal = str(payload.get("goal", ""))[:_MAX_GOAL_LEN]
+            step_count = payload.get("step_count", "?")
+            lines.append(f'- 성공 | "{user_req}" → 목표: "{goal}" ({step_count}단계)')
+        elif event_type in (EVENT_JOB_FAILED, EVENT_PLAN_FAILED):
+            error = str(payload.get("error", ""))[:_MAX_ERROR_LEN]
+            lines.append(f'- 실패 | "{user_req}" → 오류: "{error}"')
+
+    if not lines:
+        return None
+
+    return "[최근 작업 맥락]\n" + "\n".join(lines)

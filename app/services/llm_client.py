@@ -37,11 +37,16 @@ def get_llm_client():
     return OpenAI(api_key=settings.openai_api_key)
 
 
-def generate_agent_plan(user_request: str, context: str | None = None):
+def generate_agent_plan(
+    user_request: str,
+    context: str | None = None,
+    memory_context: str | None = None,
+):
     """
     사용자 요청을 받아 AI Agent 실행 계획을 생성한다.
 
-    LLM에게 JSON 응답을 강제하고, 응답을 AgentPlanResponse로 변환해 반환한다.
+    memory_context: Redis 메모리 큐에서 읽어온 최근 작업 맥락.
+                    None이면 기존 방식과 동일하게 동작한다.
     """
     from pydantic import ValidationError
     from app.schemas.agent import AgentPlanResponse
@@ -76,6 +81,9 @@ def generate_agent_plan(user_request: str, context: str | None = None):
     user_message = f"사용자 요청: {user_request}"
     if context:
         user_message += f"\n\n추가 컨텍스트: {context}"
+    if memory_context:
+        # 최근 작업 맥락을 프롬프트 끝에 덧붙여 LLM이 연속성을 유지하도록 한다.
+        user_message += f"\n\n{memory_context}"
 
     try:
         response = client.chat.completions.create(

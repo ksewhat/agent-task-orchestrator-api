@@ -1,5 +1,6 @@
 from app.schemas.job import JobStatus
 from app.services import history_store, job_store, memory_store
+from app.services.memory_store import build_memory_context
 from app.services.llm_client import (
     LLMCallError,
     LLMClientNotConfiguredError,
@@ -28,7 +29,8 @@ def run_agent_plan_job(job_id: str) -> None:
     )
 
     try:
-        result = generate_agent_plan(job.user_request, job.context)
+        memory_context = build_memory_context()
+        result = generate_agent_plan(job.user_request, job.context, memory_context)
         job_store.update_job_status(job_id, JobStatus.SUCCEEDED, result=result)
         history_store.add_entry(
             user_request=job.user_request,

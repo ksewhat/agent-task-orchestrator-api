@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from app.schemas.agent import AgentPlanRequest, AgentPlanResponse
 from app.schemas.job import JobStatus
 from app.services import history_store, memory_store
+from app.services.memory_store import build_memory_context
 from app.services.llm_client import (
     LLMCallError,
     LLMClientNotConfiguredError,
@@ -26,7 +27,8 @@ def create_agent_plan(request: AgentPlanRequest):
     created_at = datetime.now(timezone.utc)
 
     try:
-        result = generate_agent_plan(request.user_request, request.context)
+        memory_context = build_memory_context()
+        result = generate_agent_plan(request.user_request, request.context, memory_context)
         history_store.add_entry(
             user_request=request.user_request,
             status=JobStatus.SUCCEEDED,
