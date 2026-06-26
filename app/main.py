@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.api.routes import health, agent, job, agent_job, history
+from app.api.routes import health, agent, job, agent_job, history, memory
 
 
 # asynccontextmanager: async def 함수를 yield 기준으로 시작/종료 로직으로 분리
@@ -34,3 +34,4 @@ app.include_router(agent.router, prefix="/agent", tags=["Agent"])
 app.include_router(job.router, prefix="/jobs", tags=["Jobs"])
 app.include_router(agent_job.router, prefix="/agent/jobs", tags=["Agent Jobs"])
 app.include_router(history.router, prefix="/history", tags=["History"])
+app.include_router(memory.router, prefix="/agent/memory", tags=["Memory"])

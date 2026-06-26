@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas.agent import AgentPlanRequest, AgentPlanResponse
 from app.schemas.job import JobStatus
-from app.services import history_store
+from app.services import history_store, memory_store
 from app.services.llm_client import (
     LLMCallError,
     LLMClientNotConfiguredError,
@@ -34,6 +34,14 @@ def create_agent_plan(request: AgentPlanRequest):
             step_count=len(result.steps),
             created_at=created_at,
         )
+        memory_store.push_event(
+            memory_store.EVENT_PLAN_GENERATED,
+            payload={
+                "user_request": request.user_request,
+                "goal": result.goal,
+                "step_count": len(result.steps),
+            },
+        )
         return result
 
     except LLMClientNotConfiguredError as e:
@@ -43,6 +51,10 @@ def create_agent_plan(request: AgentPlanRequest):
             error=str(e),
             created_at=created_at,
         )
+        memory_store.push_event(
+            memory_store.EVENT_PLAN_FAILED,
+            payload={"user_request": request.user_request, "error": str(e)},
+        )
         raise HTTPException(status_code=503, detail=str(e))
 
     except (LLMCallError, LLMResponseParseError) as e:
@@ -51,5 +63,9 @@ def create_agent_plan(request: AgentPlanRequest):
             status=JobStatus.FAILED,
             error=str(e),
             created_at=created_at,
+        )
+        memory_store.push_event(
+            memory_store.EVENT_PLAN_FAILED,
+            payload={"user_request": request.user_request, "error": str(e)},
         )
         raise HTTPException(status_code=502, detail=str(e))

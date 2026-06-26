@@ -1,5 +1,5 @@
 from app.schemas.job import JobStatus
-from app.services import history_store, job_store
+from app.services import history_store, job_store, memory_store
 from app.services.llm_client import (
     LLMCallError,
     LLMClientNotConfiguredError,
@@ -14,13 +14,18 @@ def run_agent_plan_job(job_id: str) -> None:
 
     상태 전환: PENDING → RUNNING → SUCCEEDED / FAILED
     실행 도중 발생하는 모든 예외를 잡아 FAILED 상태와 에러 메시지로 PostgreSQL에 저장한다.
-    완료 후 히스토리에 요약 정보를 기록한다.
+    완료 후 히스토리(PostgreSQL)와 메모리 큐(Redis)에 결과를 기록한다.
     """
     job = job_store.get_job(job_id)
     if job is None:
         return
 
     job_store.update_job_status(job_id, JobStatus.RUNNING)
+    memory_store.push_event(
+        memory_store.EVENT_JOB_RUNNING,
+        payload={"user_request": job.user_request},
+        job_id=job_id,
+    )
 
     try:
         result = generate_agent_plan(job.user_request, job.context)
@@ -33,6 +38,15 @@ def run_agent_plan_job(job_id: str) -> None:
             job_id=job_id,
             created_at=job.created_at,
         )
+        memory_store.push_event(
+            memory_store.EVENT_JOB_SUCCEEDED,
+            payload={
+                "user_request": job.user_request,
+                "goal": result.goal,
+                "step_count": len(result.steps),
+            },
+            job_id=job_id,
+        )
 
     except (LLMClientNotConfiguredError, LLMCallError, LLMResponseParseError) as e:
         error_msg = str(e)
@@ -44,6 +58,11 @@ def run_agent_plan_job(job_id: str) -> None:
             job_id=job_id,
             created_at=job.created_at,
         )
+        memory_store.push_event(
+            memory_store.EVENT_JOB_FAILED,
+            payload={"user_request": job.user_request, "error": error_msg},
+            job_id=job_id,
+        )
 
     except Exception as e:
         error_msg = f"예기치 않은 오류가 발생했습니다: {e}"
@@ -54,4 +73,9 @@ def run_agent_plan_job(job_id: str) -> None:
             error=error_msg,
             job_id=job_id,
             created_at=job.created_at,
+        )
+        memory_store.push_event(
+            memory_store.EVENT_JOB_FAILED,
+            payload={"user_request": job.user_request, "error": error_msg},
+            job_id=job_id,
         )

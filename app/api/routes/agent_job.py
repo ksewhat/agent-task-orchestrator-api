@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.job import JobCreateRequest, JobResponse, JobResultResponse, JobStatus
-from app.services import job_store
+from app.services import job_store, memory_store
 from app.services.agent_runner import run_agent_plan_job
 from app.services.task_queue import task_queue
 
@@ -21,6 +21,11 @@ def create_agent_job(request: JobCreateRequest):
         raise HTTPException(status_code=400, detail="user_request는 비어 있을 수 없습니다.")
 
     job = job_store.create_job(request.user_request, request.context)
+    memory_store.push_event(
+        memory_store.EVENT_JOB_CREATED,
+        payload={"user_request": job.user_request, "context": job.context},
+        job_id=job.job_id,
+    )
 
     try:
         # task_queue.enqueue(): 함수와 인수를 Redis 큐에 등록
